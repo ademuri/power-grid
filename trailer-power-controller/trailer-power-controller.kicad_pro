@@ -48,8 +48,17 @@
           "min_clearance": 0.508
         }
       },
-      "diff_pair_dimensions": [],
-      "drc_exclusions": [],
+      "diff_pair_dimensions": [
+        {
+          "gap": 0.0,
+          "via_gap": 0.0,
+          "width": 0.0
+        }
+      ],
+      "drc_exclusions": [
+        "clearance|138600000|92100000|5114f8c2-34c4-43a1-acd2-0815722f6439|10beea89-64db-43d8-aa97-a1cc8de0668a",
+        "clearance|138600000|99700000|5d878d17-142c-4042-a3ae-d20b9cfdc93d|b5a5a2e7-b41c-4b67-b9b0-9e0ced70c329"
+      ],
       "meta": {
         "version": 2
       },
@@ -112,9 +121,36 @@
         "solder_mask_min_width": 0.0,
         "use_height_for_length_calcs": true
       },
-      "track_widths": [],
-      "via_dimensions": [],
-      "zones_allow_external_fillets": false,
+      "track_widths": [
+        0.0,
+        0.15,
+        0.2,
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+        1.5,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0
+      ],
+      "via_dimensions": [
+        {
+          "diameter": 0.0,
+          "drill": 0.0
+        },
+        {
+          "diameter": 0.6,
+          "drill": 0.4
+        },
+        {
+          "diameter": 1.0,
+          "drill": 0.6
+        }
+      ],
+      "zones_allow_external_fillets": true,
       "zones_use_no_outline": true
     },
     "layer_presets": []
@@ -125,6 +161,7 @@
   },
   "erc": {
     "erc_exclusions": [
+      "pin_to_pin|330200|2286000|dfe229ee-383c-4b7a-8881-d52e12bcd548|f1159a7b-c810-46c6-bc7b-80d033a725c8",
       "pin_to_pin|381000|279400|f1159a7b-c810-46c6-bc7b-80d033a725c8|dfe229ee-383c-4b7a-8881-d52e12bcd548"
     ],
     "meta": {
@@ -356,6 +393,27 @@
         "via_diameter": 0.8,
         "via_drill": 0.4,
         "wire_width": 6.0
+      },
+      {
+        "bus_width": 12.0,
+        "clearance": 0.127,
+        "diff_pair_gap": 0.127,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.61,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "USB",
+        "nets": [
+          "/USB_DN",
+          "/USB_DP"
+        ],
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.61,
+        "via_diameter": 0.8,
+        "via_drill": 0.4,
+        "wire_width": 6.0
       }
     ],
     "meta": {
@@ -406,7 +464,7 @@
       "workbook_filename": ""
     },
     "page_layout_descr_file": "",
-    "plot_directory": "",
+    "plot_directory": "ref",
     "spice_adjust_passive_values": false,
     "spice_external_command": "spice \"%I\"",
     "subpart_first_id": 65,
