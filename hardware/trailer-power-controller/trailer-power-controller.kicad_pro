@@ -160,10 +160,7 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [
-      "pin_to_pin|330200|2286000|dfe229ee-383c-4b7a-8881-d52e12bcd548|f1159a7b-c810-46c6-bc7b-80d033a725c8",
-      "pin_to_pin|381000|279400|f1159a7b-c810-46c6-bc7b-80d033a725c8|dfe229ee-383c-4b7a-8881-d52e12bcd548"
-    ],
+    "erc_exclusions": [],
     "meta": {
       "version": 0
     },
