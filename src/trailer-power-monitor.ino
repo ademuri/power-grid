@@ -19,8 +19,26 @@ const int kLed1 = 4;
 const int kSw2 = 19;
 const int kLed2 = 5;
 
+const uint16_t kDacScale = 4096;
+
 AsyncWebServer *server;
 Dashboard *dashboard;
+
+float GetVehicleVolts() {
+  uint16_t raw = analogRead(kVehicleSense);
+  return raw * (36 + 160) * 3.3 / 36 / kDacScale;
+}
+
+float GetBatteryVolts() {
+  uint16_t raw = analogRead(kVehicleSense);
+  return raw * (36 + 160) * 3.3 / 36 / kDacScale;
+}
+
+uint32_t GetLoadMilliamps() {
+  // Load resistor is 0.01 Ohms, and amplifier is 50x
+  uint32_t raw = analogRead(kLoadSense);
+  return raw * 330 / 50 / kDacScale;
+}
 
 void setup() {
   Serial.begin(115200);
@@ -55,6 +73,9 @@ void setup() {
   server = new AsyncWebServer(80);
   dashboard = new Dashboard(server);
   dashboard->Add<uint32_t>("Uptime", millis, 5000);
+  dashboard->Add<float>("Vehicle mV", GetVehicleVolts, 1000);
+  dashboard->Add<float>("Battery mV", GetBatteryVolts, 1000);
+  dashboard->Add<uint32_t>("Load mA", GetLoadMilliamps, 1000);
   server->begin();
 }
 
