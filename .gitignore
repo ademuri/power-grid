@@ -31,3 +31,4 @@ fp-info-cache
 src/constants.h
 .pio
 .vscode
+src/trailer-power-monitor.ino.cpp

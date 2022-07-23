@@ -5,22 +5,22 @@
 
 #include "constants.h"
 
-const int kChargeEn = 13;
-const int kRelayEn = 22;
-const int kBuzzer = 25;
-const int kTempInternal = 26;
-const int kTempExternal = 27;
-const int kVehicleSense = 32;
-const int kBatterySense = 33;
-const int kLoadSense = 34;
+static constexpr int kChargeEn = 13;
+static constexpr int kRelayEn = 22;
+static constexpr int kBuzzer = 25;
+static constexpr int kTempInternal = 26;
+static constexpr int kTempExternal = 27;
+static constexpr int kVehicleSense = 32;
+static constexpr int kBatterySense = 33;
+static constexpr int kLoadSense = 34;
 
-const int kLed0 = 12;
-const int kSw1 = 21;
-const int kLed1 = 4;
-const int kSw2 = 19;
-const int kLed2 = 5;
+static constexpr int kLed0 = 12;
+static constexpr int kSw1 = 21;
+static constexpr int kLed1 = 4;
+static constexpr int kSw2 = 19;
+static constexpr int kLed2 = 5;
 
-const uint16_t kDacScale = 4096;
+static constexpr uint16_t kDacScale = 4096;
 
 // Note: the voltage dividers for reading vehicle and battery voltages are a bit off, possibly because of leakage current through the zener diode?
 static constexpr size_t kNumVoltages = 7;
