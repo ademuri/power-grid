@@ -12,13 +12,16 @@
 static constexpr float kMaxLoadAmps = 12.0;
 // After disconnecting the vehicle, how long to wait before re-connecting.
 static constexpr uint32_t kVehicleOffDelay = 20 * 1000;
+// If the vehicle voltage drops below this, disconnect it.
+static constexpr float kVehicleLowThreshold =  10.0;
 
 // If the battery voltage drops below this, disconnect the battery.
 static constexpr float kBatteryLowThreshold = 11.4;
 // How long the battery voltage must be low before disconnection.
 static constexpr uint32_t kBatteryLowDuration = 20 * 1000;
 // After disconnecting the battery, how long to wait before reconnecting.
-static constexpr uint32_t kBatteryLowDelay = 5 * 60 * 1000;
+// This is long so that any built-up pressure in the compressor has time to discharge before we try to start it again.
+static constexpr uint32_t kBatteryLowDelay = 10 * 60 * 1000;
 
 // Pin definitions
 static constexpr int kChargeEn = 13;
@@ -55,18 +58,19 @@ bool vehicle_connected = false;
 bool battery_connected = false;
 
 Timer vehicle_off_timer{kVehicleOffDelay};
-Timer battery_low_timer{kBatteryLowDelay};
+Timer battery_low_timer{kBatteryLowDuration};
+Timer battery_off_timer{kBatteryLowDelay};
 
 float GetVehicleVolts() {
   uint16_t raw = analogRead(kVehicleSense);
   float calculated = raw * (1 + 6.2) * 3.3 / 1 / kDacScale;
-  return Interpolation::Linear(kVehicleVoltages, kTestVoltages, kNumVoltages, calculated, /*clamp=*/true);
+  return Interpolation::Linear(kVehicleVoltages, kTestVoltages, kNumVoltages, calculated, /*clamp=*/false);
 }
 
 float GetBatteryVolts() {
   uint16_t raw = analogRead(kBatterySense);
   float calculated = raw * (1 + 6.2) * 3.3 / 1 / kDacScale;
-  return Interpolation::Linear(kBatteryVoltages, kTestVoltages, kNumVoltages, calculated, /*clamp=*/true);
+  return Interpolation::Linear(kBatteryVoltages, kTestVoltages, kNumVoltages, calculated, /*clamp=*/false);
 }
 
 float GetLoadAmps() {
@@ -128,14 +132,18 @@ void loop() {
   const bool over_current = load_amps > kMaxLoadAmps;
   
   if (battery_low) {
-    battery_low_timer.Reset();
-    if (battery_connected) {
+    if (!battery_low_timer.Active() && !battery_low_timer.Expired()) {
+      battery_low_timer.Reset();
+    }
+    if (battery_low_timer.Expired() && battery_connected) {
       digitalWrite(kRelayEn, LOW);
       battery_connected = false;
+      battery_off_timer.Reset();
     }
   } else {
     // !battery_low
-    if (!battery_low_timer.Active() || battery_low_timer.Expired()) {
+    battery_low_timer.Stop();
+    if (!battery_off_timer.Active() || battery_off_timer.Expired()) {
       // Try connecting the battery
       digitalWrite(kRelayEn, HIGH);
       battery_connected = true;
