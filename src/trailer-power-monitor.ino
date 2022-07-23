@@ -2,9 +2,25 @@
 #include <WiFi.h>
 #include <dashboard.h>
 #include <InterpolationLib.h>
+#include <state-manager.h>
 
 #include "constants.h"
+#include "timer.h"
 
+// Tuning constants
+// If the current draw from the vehicle is greater than this, disconnect it.
+static constexpr float kMaxLoadAmps = 12.0;
+// After disconnecting the vehicle, how long to wait before re-connecting.
+static constexpr uint32_t kVehicleOffDelay = 20 * 1000;
+
+// If the battery voltage drops below this, disconnect the battery.
+static constexpr float kBatteryLowThreshold = 11.4;
+// How long the battery voltage must be low before disconnection.
+static constexpr uint32_t kBatteryLowDuration = 20 * 1000;
+// After disconnecting the battery, how long to wait before reconnecting.
+static constexpr uint32_t kBatteryLowDelay = 5 * 60 * 1000;
+
+// Pin definitions
 static constexpr int kChargeEn = 13;
 static constexpr int kRelayEn = 22;
 static constexpr int kBuzzer = 25;
@@ -34,6 +50,12 @@ Dashboard *dashboard;
 float vehicle_volts = 0;
 float battery_volts = 0;
 float load_amps = 0;
+
+bool vehicle_connected = false;
+bool battery_connected = false;
+
+Timer vehicle_off_timer{kVehicleOffDelay};
+Timer battery_low_timer{kBatteryLowDelay};
 
 float GetVehicleVolts() {
   uint16_t raw = analogRead(kVehicleSense);
@@ -87,9 +109,11 @@ void setup() {
   server = new AsyncWebServer(80);
   dashboard = new Dashboard(server);
   dashboard->Add<uint32_t>("Uptime", millis, 5000);
-  dashboard->Add<float>("Vehicle V", []() { return vehicle_volts; }, 100);
-  dashboard->Add<float>("Battery V", []() { return battery_volts; } , 100);
-  dashboard->Add<float>("Load A", []() { return load_amps; }, 100);
+  dashboard->Add<bool>("Vehicle Connected", vehicle_connected, 1000);
+  dashboard->Add<bool>("Battery Connected", battery_connected, 1000);
+  dashboard->Add<float>("Vehicle V", vehicle_volts, 1000);
+  dashboard->Add<float>("Battery V", battery_volts, 1000);
+  dashboard->Add<float>("Load A", []() { return load_amps; }, 1000);
   server->begin();
 
   Serial.println(WiFi.localIP());
@@ -99,4 +123,39 @@ void loop() {
   vehicle_volts = GetVehicleVolts();
   battery_volts = GetBatteryVolts();
   load_amps = GetLoadAmps();
+
+  const bool battery_low = battery_volts < kBatteryLowThreshold;
+  const bool over_current = load_amps > kMaxLoadAmps;
+  
+  if (battery_low) {
+    battery_low_timer.Reset();
+    if (battery_connected) {
+      digitalWrite(kRelayEn, LOW);
+      battery_connected = false;
+    }
+  } else {
+    // !battery_low
+    if (!battery_low_timer.Active() || battery_low_timer.Expired()) {
+      // Try connecting the battery
+      digitalWrite(kRelayEn, HIGH);
+      battery_connected = true;
+    }
+  }
+
+  if (vehicle_connected) {
+    if (over_current) {
+      digitalWrite(kChargeEn, LOW);
+      vehicle_connected = false;
+      vehicle_off_timer.Reset();
+    }
+  } else {
+    // !vehicle_connected
+    if (!vehicle_off_timer.Active() || vehicle_off_timer.Expired()) {
+      digitalWrite(kChargeEn, HIGH);
+      vehicle_connected = true;
+    }
+  }
+
+  digitalWrite(kLed1, battery_connected);
+  digitalWrite(kLed2, vehicle_connected);
 }
