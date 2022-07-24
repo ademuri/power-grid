@@ -8,12 +8,20 @@
 #include "timer.h"
 
 // Tuning constants
-// If the current draw from the vehicle is greater than this, disconnect it.
+// If the current draw from the vehicle is greater than this, disconnect the vehicle.
 static constexpr float kMaxLoadAmps = 12.0;
 // After disconnecting the vehicle, how long to wait before re-connecting.
 static constexpr uint32_t kVehicleOffDelay = 20 * 1000;
 // If the vehicle voltage drops below this, disconnect it.
 static constexpr float kVehicleLowThreshold =  10.0;
+// If the vehicle is lower than the battery for this duration, disconnect the vehicle.
+static constexpr uint32_t kVehicleLowerThanBatteryDuration = 30 * 1000;
+// Periodically, disconnect the vehicle and check its voltage.
+static constexpr uint32_t kVehicleCheckPeriod = 10 * 1000;
+// When checking the vehicle while disconnected, wait this long after disconnecting before measuring the voltage.
+static constexpr uint32_t kVehicleCheckDelay = 10;
+// When the vehicle is not connected, the voltage must be this high to connect it. This is to prevent draining the vehicle's battery when the engine isn't running.
+static constexpr float kVehicleDisconnectedCutoff = 13.0;
 
 // If the battery voltage drops below this, disconnect the battery.
 static constexpr float kBatteryLowThreshold = 11.4;
@@ -50,16 +58,20 @@ double kBatteryVoltages[kNumVoltages] = {9.45, 10.41, 11.43, 12.30, 13.09, 13.84
 AsyncWebServer *server;
 Dashboard *dashboard;
 
+float vehicle_volts_disconnected = 0;
 float vehicle_volts = 0;
 float battery_volts = 0;
+float battery_volts_no_vehicle = 0;
 float load_amps = 0;
 
 bool vehicle_connected = false;
 bool battery_connected = false;
 
 Timer vehicle_off_timer{kVehicleOffDelay};
+Timer vehicle_lower_than_battery_timer{kVehicleLowerThanBatteryDuration};
 Timer battery_low_timer{kBatteryLowDuration};
 Timer battery_off_timer{kBatteryLowDelay};
+Timer check_vehicle_period{kVehicleCheckPeriod};
 
 float GetVehicleVolts() {
   uint16_t raw = analogRead(kVehicleSense);
@@ -116,7 +128,9 @@ void setup() {
   dashboard->Add<bool>("Vehicle Connected", vehicle_connected, 1000);
   dashboard->Add<bool>("Battery Connected", battery_connected, 1000);
   dashboard->Add<float>("Vehicle V", vehicle_volts, 1000);
+  dashboard->Add<float>("Vehicle V (floating)", vehicle_volts_disconnected, 1000);
   dashboard->Add<float>("Battery V", battery_volts, 1000);
+  dashboard->Add<float>("Battery V (no vehicle)", battery_volts_no_vehicle, 1000);
   dashboard->Add<float>("Load A", []() { return load_amps; }, 1000);
   server->begin();
 
@@ -130,9 +144,16 @@ void loop() {
 
   const bool battery_low = battery_volts < kBatteryLowThreshold;
   const bool over_current = load_amps > kMaxLoadAmps;
+  const bool vehicle_low = vehicle_volts < kVehicleLowThreshold;
+
+  if (vehicle_volts >= battery_volts) {
+    vehicle_lower_than_battery_timer.Stop();
+  } else if (!vehicle_lower_than_battery_timer.Running()) {
+    vehicle_lower_than_battery_timer.Reset();
+  }
   
   if (battery_low) {
-    if (!battery_low_timer.Active() && !battery_low_timer.Expired()) {
+    if (!battery_low_timer.Running()) {
       battery_low_timer.Reset();
     }
     if (battery_low_timer.Expired() && battery_connected) {
@@ -151,16 +172,32 @@ void loop() {
   }
 
   if (vehicle_connected) {
-    if (over_current) {
+    if (over_current || vehicle_low || vehicle_lower_than_battery_timer.Expired()) {
       digitalWrite(kChargeEn, LOW);
       vehicle_connected = false;
       vehicle_off_timer.Reset();
+      check_vehicle_period.Stop();
+    } else if (check_vehicle_period.Expired()) {
+      digitalWrite(kChargeEn, LOW);
+      delay(kVehicleCheckDelay);
+      vehicle_volts_disconnected = GetVehicleVolts();
+      battery_volts_no_vehicle = GetBatteryVolts();
+      digitalWrite(kChargeEn, HIGH);
+      check_vehicle_period.Reset();
+
+      if (vehicle_volts_disconnected < kVehicleDisconnectedCutoff) {
+        digitalWrite(kChargeEn, LOW);
+        vehicle_connected = false;
+        vehicle_off_timer.Reset();
+        check_vehicle_period.Stop();
+      }
     }
   } else {
     // !vehicle_connected
-    if (!vehicle_off_timer.Active() || vehicle_off_timer.Expired()) {
+    if ((!vehicle_off_timer.Active() || vehicle_off_timer.Expired()) && !vehicle_low && !vehicle_lower_than_battery_timer.Running() && vehicle_volts > kVehicleDisconnectedCutoff) {
       digitalWrite(kChargeEn, HIGH);
       vehicle_connected = true;
+      check_vehicle_period.Reset();
     }
   }
 

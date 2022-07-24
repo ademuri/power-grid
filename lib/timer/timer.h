@@ -15,6 +15,7 @@ class Timer {
   }
   bool Expired() { return started_ && millis() > expires_; }
   bool Active() { return started_ && millis() <= expires_; }
+  bool Running() {return started_; }
 
  protected:
   const uint32_t duration_;
