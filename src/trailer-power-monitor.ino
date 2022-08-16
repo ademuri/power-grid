@@ -58,6 +58,7 @@ static constexpr int kTempExternal = 27;
 static constexpr int kVehicleSense = 32;
 static constexpr int kBatterySense = 33;
 static constexpr int kLoadSense = 34;
+static constexpr int kInsideTempPin = 26;
 static constexpr int kOutsideTempPin = 27;
 
 static constexpr int kLed0 = 12;
@@ -105,6 +106,7 @@ Timer inverter_try_reset_timer{kInverterTryResetPeriod};
 Timer inverter_hard_reset_timer{kInverterHardResetPeriod};
 Timer check_vehicle_period{kVehicleCheckPeriod};
 
+DS18B20 inside_temp = DS18B20(kInsideTempPin);
 DS18B20 outside_temp = DS18B20(kOutsideTempPin);
 
 char *FormatFloat(const float f, size_t decimal_places) {
@@ -214,6 +216,15 @@ void setup() {
         return FormatTemp(outside_temp.getTempF());
       },
       1000);
+  dashboard->Add<char *>(
+      "Trailer temp",
+      []() {
+        if (std::abs(inside_temp.getTempC() + .0625) < 0.01) {
+          inside_temp.selectNext();
+        }
+        return FormatTemp(inside_temp.getTempF());
+      },
+      1000);
   server->begin();
 
   Serial.println(WiFi.localIP());
@@ -223,8 +234,12 @@ void setup() {
   if (outside_temp.getNumberOfDevices() < 1) {
     Serial.println("No outside temp sensor found");
   }
+  if (inside_temp.getNumberOfDevices() < 1) {
+    Serial.println("No inside temp sensor found");
+  }
 
   outside_temp.selectNext();
+  inside_temp.selectNext();
 }
 
 void loop() {
@@ -330,6 +345,7 @@ void loop() {
     }
   }
 
+  digitalWrite(kLed0, (millis() / 100) % 50 == 0);
   digitalWrite(kLed1, battery_connected);
   digitalWrite(kLed2, vehicle_connected);
 }
