@@ -110,11 +110,16 @@ DS18B20 inside_temp = DS18B20(kInsideTempPin);
 DS18B20 outside_temp = DS18B20(kOutsideTempPin);
 
 char *FormatFloat(const float f, size_t decimal_places) {
-  static constexpr size_t size = 10;
+  static constexpr size_t size = 20;
   static char buffer[size];
   static char format[size];
-  snprintf(format, size, "%%.%df", decimal_places);
-  snprintf(buffer, size, format, f);
+  if (snprintf(format, size, "%%.%df", decimal_places) <= 0) {
+    buffer[0] = '\0';
+    return buffer;
+  }
+  if (snprintf(buffer, size, format, f) <= 0) {
+    buffer[0] = '\0';
+  }
   return buffer;
 }
 
