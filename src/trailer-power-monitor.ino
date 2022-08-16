@@ -1,8 +1,11 @@
+#include <DS18B20.h>
 #include <ESPmDNS.h>
 #include <InterpolationLib.h>
 #include <WiFi.h>
 #include <dashboard.h>
 #include <state-manager.h>
+
+#include <string>
 
 #include "constants.h"
 #include "timer.h"
@@ -55,6 +58,7 @@ static constexpr int kTempExternal = 27;
 static constexpr int kVehicleSense = 32;
 static constexpr int kBatterySense = 33;
 static constexpr int kLoadSense = 34;
+static constexpr int kOutsideTempPin = 27;
 
 static constexpr int kLed0 = 12;
 static constexpr int kSw1 = 21;
@@ -100,6 +104,24 @@ Timer battery_off_timer{kBatteryLowDelay};
 Timer inverter_try_reset_timer{kInverterTryResetPeriod};
 Timer inverter_hard_reset_timer{kInverterHardResetPeriod};
 Timer check_vehicle_period{kVehicleCheckPeriod};
+
+DS18B20 outside_temp = DS18B20(kOutsideTempPin);
+
+char *FormatFloat(const float f, size_t decimal_places) {
+  static constexpr size_t size = 10;
+  static char buffer[size];
+  static char format[size];
+  snprintf(format, size, "%%.%df", decimal_places);
+  snprintf(buffer, size, format, f);
+  return buffer;
+}
+
+char *FormatTemp(const float t) {
+  static constexpr size_t size = 10;
+  static char buffer[size];
+  snprintf(buffer, size, "%.0f °F", t);
+  return buffer;
+}
 
 float GetVehicleVolts() {
   uint16_t raw = analogRead(kVehicleSense);
@@ -164,24 +186,45 @@ void setup() {
   dashboard->Add<uint32_t>("Uptime", millis, 5000);
   dashboard->Add<bool>("Vehicle Connected", vehicle_connected, 1000);
   dashboard->Add<bool>("Battery Connected", battery_connected, 1000);
-  dashboard->Add<float>("Vehicle V", vehicle_volts, 1000);
-  dashboard->Add<float>("Vehicle V (floating)", vehicle_volts_disconnected,
-                        1000);
-  dashboard->Add<float>("Battery V", battery_volts, 1000);
-  dashboard->Add<float>("Battery V (no vehicle)", battery_volts_no_vehicle,
-                        1000);
-  dashboard->Add<float>("Battery V, min", battery_min_time_volts, 1000);
+  dashboard->Add<char *>(
+      "Vehicle V", []() { return FormatFloat(vehicle_volts, 2); }, 1000);
+  dashboard->Add<char *>(
+      "Vehicle V (floating)",
+      []() { return FormatFloat(vehicle_volts_disconnected, 2); }, 1000);
+  dashboard->Add<char *>(
+      "Battery V", []() { return FormatFloat(battery_volts, 2); }, 1000);
+  dashboard->Add<char *>(
+      "Battery V (no vehicle)",
+      []() { return FormatFloat(battery_volts_no_vehicle, 2); }, 1000);
+  dashboard->Add<char *>(
+      "Battery V, min", []() { return FormatFloat(battery_min_time_volts, 2); },
+      1000);
   dashboard->Add<uint32_t>("Battery min time", battery_min_time, 1000);
   dashboard->Add<uint32_t>(
       "Minutes since battery min",
       []() { return time_since_battery_min_timer.Get() / (60 * 1000); }, 10000);
-  dashboard->Add<float>(
-      "Load A", []() { return load_amps; }, 1000);
+  dashboard->Add<char *>(
+      "Load A", []() { return FormatFloat(load_amps, 2); }, 1000);
+  dashboard->Add<char *>(
+      "Freezer temp",
+      []() {
+        if (std::abs(outside_temp.getTempC() + .0625) < 0.01) {
+          outside_temp.selectNext();
+        }
+        return FormatTemp(outside_temp.getTempF());
+      },
+      1000);
   server->begin();
 
   Serial.println(WiFi.localIP());
   inverter_try_reset_timer.Reset();
   inverter_hard_reset_timer.Reset();
+
+  if (outside_temp.getNumberOfDevices() < 1) {
+    Serial.println("No outside temp sensor found");
+  }
+
+  outside_temp.selectNext();
 }
 
 void loop() {
