@@ -36,6 +36,15 @@ static constexpr uint32_t kBatteryLowDuration = 20 * 1000;
 // This is long so that any built-up pressure in the compressor has time to
 // discharge before we try to start it again.
 static constexpr uint32_t kBatteryLowDelay = 10 * 60 * 1000;
+// Try to reset the inverter after this period
+static constexpr uint32_t kInverterTryResetPeriod = 30 * 60 * 1000;
+// Always reset the inverter after this period
+static constexpr uint32_t kInverterHardResetPeriod = 60 * 60 * 1000;
+// If the current from the vehicle is below this, reset the inverter
+static constexpr float kInverterResetCurrent = 4.0;
+// How long to wait after seeing a battery min, before trying to reset inverter.
+// This attemps to avoid turning off the inverter while the load is running.
+static constexpr uint32_t kBatteryMinResetDelay = 15 * 60 * 1000;
 
 // Pin definitions
 static constexpr int kChargeEn = 13;
@@ -88,6 +97,8 @@ Timer vehicle_off_timer{kVehicleOffDelay};
 Timer vehicle_lower_than_battery_timer{kVehicleLowerThanBatteryDuration};
 Timer battery_low_timer{kBatteryLowDuration};
 Timer battery_off_timer{kBatteryLowDelay};
+Timer inverter_try_reset_timer{kInverterTryResetPeriod};
+Timer inverter_hard_reset_timer{kInverterHardResetPeriod};
 Timer check_vehicle_period{kVehicleCheckPeriod};
 
 float GetVehicleVolts() {
@@ -127,17 +138,18 @@ void setup() {
   pinMode(kSw2, INPUT_PULLUP);
   pinMode(kLed2, OUTPUT);
 
-  Serial.print("Setting up AP... ");
-  WiFi.softAP("TrailerPowerMonitor");
-  Serial.println("Done.");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.softAPIP());
+  // Serial.print("Setting up AP... ");
+  // WiFi.softAP("TrailerPowerMonitor");
+  // Serial.println("Done.");
+  // Serial.print("IP address: ");
+  // Serial.println(WiFi.softAPIP());
 
-  // Serial.print("Connecting to wifi...");
-  // WiFi.begin(ssid, password);
-  // while (WiFi.status() != WL_CONNECTED);
-  // delay(500);
-  // Serial.println(" done.");
+  Serial.print("Connecting to wifi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED)
+    ;
+  delay(500);
+  Serial.println(" done.");
 
   if (MDNS.begin("trailer-power-monitor")) {
     // Add service to MDNS-SD
@@ -168,6 +180,8 @@ void setup() {
   server->begin();
 
   Serial.println(WiFi.localIP());
+  inverter_try_reset_timer.Reset();
+  inverter_hard_reset_timer.Reset();
 }
 
 void loop() {
@@ -214,7 +228,7 @@ void loop() {
       battery_low_timer.Reset();
     }
     if (battery_low_timer.Expired() && battery_connected) {
-      digitalWrite(kRelayEn, LOW);
+      digitalWrite(kRelayEn, HIGH);
       battery_connected = false;
       battery_off_timer.Reset();
     }
@@ -223,8 +237,20 @@ void loop() {
     battery_low_timer.Stop();
     if (!battery_off_timer.Active() || battery_off_timer.Expired()) {
       // Try connecting the battery
-      digitalWrite(kRelayEn, HIGH);
+      digitalWrite(kRelayEn, LOW);
       battery_connected = true;
+    } else {
+      // Inverter continues to be on
+      if (inverter_hard_reset_timer.Expired() ||
+          (inverter_try_reset_timer.Expired() &&
+           load_amps < kInverterResetCurrent &&
+           time_since_battery_min_timer.Get() > kBatteryMinResetDelay)) {
+        digitalWrite(kRelayEn, HIGH);
+        delay(100);
+        digitalWrite(kRelayEn, LOW);
+        inverter_try_reset_timer.Reset();
+        inverter_hard_reset_timer.Reset();
+      }
     }
   }
 
