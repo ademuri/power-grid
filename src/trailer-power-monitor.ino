@@ -67,6 +67,8 @@ static constexpr int kLed1 = 4;
 static constexpr int kSw2 = 19;
 static constexpr int kLed2 = 5;
 
+static constexpr int kBuzzerPwmChannel = 0;
+
 static constexpr uint16_t kDacScale = 4096;
 
 // Note: the voltage dividers for reading vehicle and battery voltages are a bit
@@ -233,6 +235,7 @@ void setup() {
   server->begin();
 
   Serial.println(WiFi.localIP());
+<<<<<<< HEAD
   inverter_try_reset_timer.Reset();
   inverter_hard_reset_timer.Reset();
 
@@ -245,6 +248,13 @@ void setup() {
 
   outside_temp.selectNext();
   inside_temp.selectNext();
+=======
+
+  ledcAttachPin(kBuzzer, kBuzzerPwmChannel);
+  ledcWriteTone(kBuzzerPwmChannel, 2000);
+  delay(500);
+  ledcWriteTone(kBuzzerPwmChannel, 0);
+>>>>>>> 902227d (Add a tone on startup)
 }
 
 void loop() {
