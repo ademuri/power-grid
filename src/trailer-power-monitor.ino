@@ -235,7 +235,12 @@ void setup() {
   server->begin();
 
   Serial.println(WiFi.localIP());
-<<<<<<< HEAD
+  
+  ledcAttachPin(kBuzzer, kBuzzerPwmChannel);
+  ledcWriteTone(kBuzzerPwmChannel, 2000);
+  delay(500);
+  ledcWriteTone(kBuzzerPwmChannel, 0);
+
   inverter_try_reset_timer.Reset();
   inverter_hard_reset_timer.Reset();
 
@@ -248,13 +253,6 @@ void setup() {
 
   outside_temp.selectNext();
   inside_temp.selectNext();
-=======
-
-  ledcAttachPin(kBuzzer, kBuzzerPwmChannel);
-  ledcWriteTone(kBuzzerPwmChannel, 2000);
-  delay(500);
-  ledcWriteTone(kBuzzerPwmChannel, 0);
->>>>>>> 902227d (Add a tone on startup)
 }
 
 void loop() {
