@@ -1,3 +1,4 @@
+#include <ArduinoOTA.h>
 #include <DS18B20.h>
 #include <ESPmDNS.h>
 #include <InterpolationLib.h>
@@ -108,8 +109,8 @@ Timer inverter_try_reset_timer{kInverterTryResetPeriod};
 Timer inverter_hard_reset_timer{kInverterHardResetPeriod};
 Timer check_vehicle_period{kVehicleCheckPeriod};
 
-DS18B20 inside_temp = DS18B20(kInsideTempPin);
-DS18B20 outside_temp = DS18B20(kOutsideTempPin);
+DS18B20 board_therm = DS18B20(kInsideTempPin);
+DS18B20 external_therm = DS18B20(kOutsideTempPin);
 
 char *FormatFloat(const float f, size_t decimal_places) {
   static constexpr size_t size = 20;
@@ -152,6 +153,9 @@ float GetLoadAmps() {
   return raw * 330.0 / 50 / kDacScale;
 }
 
+float board_temp = 0;
+float external_temp = 0;
+
 void setup() {
   Serial.begin(115200);
 
@@ -192,50 +196,38 @@ void setup() {
 
   server = new AsyncWebServer(80);
   dashboard = new Dashboard(server);
-  dashboard->Add<uint32_t>("Uptime", millis, 5000);
-  dashboard->Add<bool>("Vehicle Connected", vehicle_connected, 1000);
-  dashboard->Add<bool>("Battery Connected", battery_connected, 1000);
+  dashboard->Add<uint32_t>("Uptime", millis, 10000);
+  dashboard->Add<bool>("Vehicle Connected", vehicle_connected, 5100);
+  dashboard->Add<bool>("Battery Connected", battery_connected, 5200);
   dashboard->Add<char *>(
-      "Vehicle V", []() { return FormatFloat(vehicle_volts, 2); }, 1000);
+      "Vehicle V", []() { return FormatFloat(vehicle_volts, 2); }, 1020);
   dashboard->Add<char *>(
       "Vehicle V (floating)",
-      []() { return FormatFloat(vehicle_volts_disconnected, 2); }, 1000);
+      []() { return FormatFloat(vehicle_volts_disconnected, 2); }, 5300);
   dashboard->Add<char *>(
-      "Battery V", []() { return FormatFloat(battery_volts, 2); }, 1000);
+      "Battery V", []() { return FormatFloat(battery_volts, 2); }, 1040);
   dashboard->Add<char *>(
       "Battery V (no vehicle)",
-      []() { return FormatFloat(battery_volts_no_vehicle, 2); }, 1000);
+      []() { return FormatFloat(battery_volts_no_vehicle, 2); }, 5400);
+  // dashboard->Add<char *>(
+  //     "Battery V, min", []() { return FormatFloat(battery_min_time_volts, 2); },
+  //     10100);
+  // dashboard->Add<uint32_t>("Battery min time", battery_min_time, 10200);
+  // dashboard->Add<uint32_t>(
+  //     "Minutes since battery min",
+  //     []() { return time_since_battery_min_timer.Get() / (60 * 1000); }, 9900);
   dashboard->Add<char *>(
-      "Battery V, min", []() { return FormatFloat(battery_min_time_volts, 2); },
-      1000);
-  dashboard->Add<uint32_t>("Battery min time", battery_min_time, 1000);
-  dashboard->Add<uint32_t>(
-      "Minutes since battery min",
-      []() { return time_since_battery_min_timer.Get() / (60 * 1000); }, 10000);
+      "Load A", []() { return FormatFloat(load_amps, 2); }, 900);
   dashboard->Add<char *>(
-      "Load A", []() { return FormatFloat(load_amps, 2); }, 1000);
+      "External temp", []() { return FormatTemp(external_temp); },
+      12100);
   dashboard->Add<char *>(
-      "Freezer temp",
-      []() {
-        if (std::abs(outside_temp.getTempC() + .0625) < 0.01) {
-          outside_temp.selectNext();
-        }
-        return FormatTemp(outside_temp.getTempF());
-      },
-      1000);
-  dashboard->Add<char *>(
-      "Trailer temp",
-      []() {
-        if (std::abs(inside_temp.getTempC() + .0625) < 0.01) {
-          inside_temp.selectNext();
-        }
-        return FormatTemp(inside_temp.getTempF());
-      },
-      1000);
+      "Board temp", []() { return FormatTemp(board_temp); },
+      12500);
   server->begin();
 
   Serial.println(WiFi.localIP());
-  
+
   ledcAttachPin(kBuzzer, kBuzzerPwmChannel);
   ledcWriteTone(kBuzzerPwmChannel, 2000);
   delay(500);
@@ -244,18 +236,52 @@ void setup() {
   inverter_try_reset_timer.Reset();
   inverter_hard_reset_timer.Reset();
 
-  if (outside_temp.getNumberOfDevices() < 1) {
+  if (external_therm.getNumberOfDevices() < 1) {
     Serial.println("No outside temp sensor found");
   }
-  if (inside_temp.getNumberOfDevices() < 1) {
+  if (board_therm.getNumberOfDevices() < 1) {
     Serial.println("No inside temp sensor found");
   }
 
-  outside_temp.selectNext();
-  inside_temp.selectNext();
+  external_therm.selectNext();
+  board_therm.selectNext();
+
+  ArduinoOTA
+      .onStart([]() {
+        String type;
+        if (ArduinoOTA.getCommand() == U_FLASH)
+          type = "sketch";
+        else  // U_SPIFFS
+          type = "filesystem";
+
+        // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS
+        // using SPIFFS.end()
+        Serial.println("Start updating " + type);
+      })
+      .onEnd([]() { Serial.println("\nEnd"); })
+      .onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      })
+      .onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR)
+          Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR)
+          Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR)
+          Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR)
+          Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR)
+          Serial.println("End Failed");
+      });
+
+  ArduinoOTA.begin();
 }
 
 void loop() {
+  ArduinoOTA.handle();
+
   vehicle_volts = GetVehicleVolts();
   battery_volts = GetBatteryVolts();
   load_amps = GetLoadAmps();
@@ -361,4 +387,13 @@ void loop() {
   digitalWrite(kLed0, (millis() / 100) % 50 == 0);
   digitalWrite(kLed1, battery_connected);
   digitalWrite(kLed2, vehicle_connected);
+
+  if (std::abs(external_therm.getTempC() + .0625) < 0.01) {
+    external_therm.selectNext();
+  }
+  if (std::abs(board_therm.getTempC() + .0625) < 0.01) {
+    board_therm.selectNext();
+  }
+  external_temp = external_therm.getTempF();
+  board_temp = board_therm.getTempF();
 }
