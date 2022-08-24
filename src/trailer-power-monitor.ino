@@ -108,6 +108,7 @@ Timer battery_off_timer{kBatteryLowDelay};
 Timer inverter_try_reset_timer{kInverterTryResetPeriod};
 Timer inverter_hard_reset_timer{kInverterHardResetPeriod};
 Timer check_vehicle_period{kVehicleCheckPeriod};
+Timer inverter_startup_reset_timer{60 * 1000};
 
 DS18B20 board_therm = DS18B20(kInsideTempPin);
 DS18B20 external_therm = DS18B20(kOutsideTempPin);
@@ -277,6 +278,7 @@ void setup() {
       });
 
   ArduinoOTA.begin();
+  inverter_startup_reset_timer.Reset();
 }
 
 void loop() {
@@ -338,12 +340,14 @@ void loop() {
       battery_connected = true;
     } else {
       // Inverter continues to be on
-      if (inverter_hard_reset_timer.Expired() ||
+      if (inverter_startup_reset_timer.Expired() ||
+        inverter_hard_reset_timer.Expired() ||
           (inverter_try_reset_timer.Expired() &&
            load_amps < kInverterResetCurrent &&
            time_since_battery_min_timer.Get() > kBatteryMinResetDelay)) {
+        inverter_startup_reset_timer.Stop();
         digitalWrite(kRelayEn, HIGH);
-        delay(100);
+        delay(1000);
         digitalWrite(kRelayEn, LOW);
         inverter_try_reset_timer.Reset();
         inverter_hard_reset_timer.Reset();
