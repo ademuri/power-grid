@@ -174,18 +174,18 @@ void setup() {
   pinMode(kSw2, INPUT_PULLUP);
   pinMode(kLed2, OUTPUT);
 
-  // Serial.print("Setting up AP... ");
-  // WiFi.softAP("TrailerPowerMonitor");
-  // Serial.println("Done.");
-  // Serial.print("IP address: ");
-  // Serial.println(WiFi.softAPIP());
+  Serial.print("Setting up AP... ");
+  WiFi.softAP("TrailerPowerMonitor");
+  Serial.println("Done.");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.softAPIP());
 
-  Serial.print("Connecting to wifi...");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-    ;
-  delay(500);
-  Serial.println(" done.");
+  // Serial.print("Connecting to wifi...");
+  // WiFi.begin(ssid, password);
+  // while (WiFi.status() != WL_CONNECTED)
+  //   ;
+  // delay(500);
+  // Serial.println(" done.");
 
   if (MDNS.begin("trailer-power-monitor")) {
     // Add service to MDNS-SD
