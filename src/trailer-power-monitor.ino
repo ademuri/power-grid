@@ -211,20 +211,19 @@ void setup() {
       "Battery V (no vehicle)",
       []() { return FormatFloat(battery_volts_no_vehicle, 2); }, 5400);
   // dashboard->Add<char *>(
-  //     "Battery V, min", []() { return FormatFloat(battery_min_time_volts, 2); },
-  //     10100);
+  //     "Battery V, min", []() { return FormatFloat(battery_min_time_volts, 2);
+  //     }, 10100);
   // dashboard->Add<uint32_t>("Battery min time", battery_min_time, 10200);
   // dashboard->Add<uint32_t>(
   //     "Minutes since battery min",
-  //     []() { return time_since_battery_min_timer.Get() / (60 * 1000); }, 9900);
+  //     []() { return time_since_battery_min_timer.Get() / (60 * 1000); },
+  //     9900);
   dashboard->Add<char *>(
       "Load A", []() { return FormatFloat(load_amps, 2); }, 900);
   dashboard->Add<char *>(
-      "External temp", []() { return FormatTemp(external_temp); },
-      12100);
+      "External temp", []() { return FormatTemp(external_temp); }, 12100);
   dashboard->Add<char *>(
-      "Board temp", []() { return FormatTemp(board_temp); },
-      12500);
+      "Board temp", []() { return FormatTemp(board_temp); }, 12500);
   server->begin();
 
   Serial.println(WiFi.localIP());
@@ -322,38 +321,40 @@ void loop() {
     vehicle_lower_than_battery_timer.Reset();
   }
 
-  if (battery_low) {
-    if (!battery_low_timer.Running()) {
-      battery_low_timer.Reset();
-    }
-    if (battery_low_timer.Expired() && battery_connected) {
-      digitalWrite(kRelayEn, HIGH);
-      battery_connected = false;
-      battery_off_timer.Reset();
-    }
-  } else {
-    // !battery_low
-    battery_low_timer.Stop();
-    if (!battery_off_timer.Active() || battery_off_timer.Expired()) {
-      // Try connecting the battery
-      digitalWrite(kRelayEn, LOW);
-      battery_connected = true;
-    } else {
-      // Inverter continues to be on
-      if (inverter_startup_reset_timer.Expired() ||
-        inverter_hard_reset_timer.Expired() ||
-          (inverter_try_reset_timer.Expired() &&
-           load_amps < kInverterResetCurrent &&
-           time_since_battery_min_timer.Get() > kBatteryMinResetDelay)) {
-        inverter_startup_reset_timer.Stop();
-        digitalWrite(kRelayEn, HIGH);
-        delay(1000);
-        digitalWrite(kRelayEn, LOW);
-        inverter_try_reset_timer.Reset();
-        inverter_hard_reset_timer.Reset();
-      }
-    }
+  // if (battery_low) {
+  //   if (!battery_low_timer.Running()) {
+  //     battery_low_timer.Reset();
+  //   }
+  //   if (battery_low_timer.Expired() && battery_connected) {
+  //     digitalWrite(kRelayEn, HIGH);
+  //     battery_connected = false;
+  //     battery_off_timer.Reset();
+  //   }
+  // } else {
+  // !battery_low
+  // battery_low_timer.Stop();
+  // if (!battery_off_timer.Active() || battery_off_timer.Expired()) {
+  //   // Try connecting the battery
+  //   digitalWrite(kRelayEn, LOW);
+  //   battery_connected = true;
+  // } else {
+  // Inverter continues to be on
+  if (inverter_startup_reset_timer.Expired() ||
+      inverter_hard_reset_timer.Expired() ||
+      (inverter_try_reset_timer.Expired() &&
+       load_amps < kInverterResetCurrent &&
+       time_since_battery_min_timer.Get() > kBatteryMinResetDelay)) {
+    inverter_startup_reset_timer.Stop();
+    digitalWrite(kLed1, HIGH);
+    digitalWrite(kRelayEn, HIGH);
+    delay(1000);
+    digitalWrite(kLed1, LOW);
+    digitalWrite(kRelayEn, LOW);
+    inverter_try_reset_timer.Reset();
+    inverter_hard_reset_timer.Reset();
   }
+  // }
+  // }
 
   if (vehicle_connected) {
     if (over_current || vehicle_low ||
@@ -389,7 +390,7 @@ void loop() {
   }
 
   digitalWrite(kLed0, (millis() / 100) % 50 == 0);
-  digitalWrite(kLed1, battery_connected);
+  // digitalWrite(kLed1, battery_connected);
   digitalWrite(kLed2, vehicle_connected);
 
   if (std::abs(external_therm.getTempC() + .0625) < 0.01) {
